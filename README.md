@@ -4,7 +4,7 @@
 * Python version 3.6
 * A [PyTorch installation](http://pytorch.org/)
 
-## 文件说明
+## FILE description
 * ./checkpoint  : Stored with trained models
     ResNet18 : Stored baseline best model of ResNet18 
     ResNet18_v2 : Stored the best model of ResNet18 using the modified mixup, including the results obtained by training 200 epochs by default and training 1000 epochs respectively
