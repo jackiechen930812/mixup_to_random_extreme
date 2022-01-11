@@ -38,7 +38,6 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+    # return criterion(pred, lam * y_a + (1 - lam)*y_b )
 
-
- 
 
