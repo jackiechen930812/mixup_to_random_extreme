@@ -22,17 +22,17 @@ import torchvision.datasets as datasets
 import models
 from utils import progress_bar
 
-import mixup_v2 as mp
+import mixup_v3 as mp
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--lr', default=0.1, type=float, help='learning rate')  #0.02
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 parser.add_argument('--model', default="ResNet18", type=str,
                     help='model type (default: ResNet18)')
 parser.add_argument('--name', default='0', type=str, help='name of run')
 parser.add_argument('--seed', default=0, type=int, help='random seed')
-parser.add_argument('--batch-size', default=128, type=int, help='batch size')
+parser.add_argument('--batch-size', default=128, type=int, help='batch size') #24
 parser.add_argument('--epoch', default=200, type=int,
                     help='total epochs to run')
 parser.add_argument('--no-augment', dest='augment', action='store_false',
@@ -103,7 +103,7 @@ else:
 
 if not os.path.isdir('results'):
     os.mkdir('results')
-logname = ('results/log' +  '_' + args.model + '_epoch200_'
+logname = ('results/log' +  '_' + args.model + '_epoch50_v3_'
            + str(args.seed) + '.csv')
 
 if use_cuda:
@@ -219,14 +219,10 @@ def checkpoint(acc, epoch):
         'epoch': epoch,
         'rng_state': torch.get_rng_state()
     }
-    if not os.path.isdir('checkpoint/DesNet190/'):
-        os.mkdir('checkpoint/DesNet190/')
-    torch.save(state, './checkpoint/DesNet190/ckpt.t7' +  '_epoch200_' + args.model + '_'
+    if not os.path.isdir('checkpoint/ResNet18/'):
+        os.mkdir('checkpoint/ResNet18/')
+    torch.save(state, './checkpoint/ResNet18/ckpt.t7' +  '_epoch50_v3_' + args.model + '_'
                + str(args.seed))
-    # if not os.path.isdir('checkpoint/ResNet18_v2/'):
-    #     os.mkdir('checkpoint/ResNet18_v2/')
-    # torch.save(state, './checkpoint/ResNet18_v2/ckpt.t7' +  '_epoch200_' + args.model + '_'
-    #            + str(args.seed))
 
 
 def adjust_learning_rate(optimizer, epoch):
