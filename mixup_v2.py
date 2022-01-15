@@ -8,8 +8,8 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     # print("x_size",x.size())   #x_size torch.Size([128, 3, 32, 32])
     if alpha > 0:
-    #    lam = np.random.beta(alpha, alpha,x.size()[1]*x.size()[2]*x.size()[3])
-        lam = np.random.normal(loc=0.0, scale=1.0, size=(x.size()[1] * x.size()[2] * x.size()[3]))
+        lam = np.random.beta(alpha, alpha, x.size()[1] * x.size()[2] * x.size()[3])
+        # lam = np.random.normal(loc=0.5, scale=1.0, size=(x.size()[1] * x.size()[2] * x.size()[3]))
     else:
         lam = 1
     lam_average = np.mean(lam)
