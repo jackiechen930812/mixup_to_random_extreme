@@ -6,19 +6,13 @@
 
 ## FILE description
 * ./checkpoint  : Stored with trained models
-    ResNet18 : Stored baseline best model of ResNet18 
-    ResNet18_v2 : Stored the best model of ResNet18 using the modified mixup, including the results obtained by training 200 epochs by default and training 1000 epochs respectively
-    DenseNet190 : Stored baseline best model of DenseNet190 
-    DenseNet190_v2 : Stored the best model of DenseNet190 using the modified mixup
 
 * ./results   : Stored training log
-*      ./results/baseline
-                 ResNet18_baseline  
-                 ResNet18_v2_epoch200
-*      ./results/sum_up
 
 * ./mixup.py  :   original mixup function: Beta Distribution with vector
+
 * ./mixup_v2.py : modified mixup function: Matrix-Mixup + Gaussian Distribution
+
 * ./train.py  
     (Modify line 25 during training. If you use the original mixup, change it to import mixup as mp
             Use the modified mixup to import mixup_v2 as mp)
