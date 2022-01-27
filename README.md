@@ -54,7 +54,7 @@ model2-2 Matrix-Mixup + Gaussian Distribution(mixup_v2)    (ckpt.t7_ResNet18_epo
 Before PGD attack, accuracy: 91.58 %
 After PGD attack, accuracy: 18.56 %
 
-    model2-2 test result：
+model2-2 test result：
 Before PGD attack, accuracy: 78.17 %
 After PGD attack, accuracy: 24.47 %
 
