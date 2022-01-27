@@ -18,9 +18,7 @@
 *      ./results/sum_up
 
 * ./mixup.py  :   original mixup function: Beta Distribution with vector
-* ./mixup_v2.py : modified mixup function: Beta Distribution with matrix (2 loss function)
-* ./mixup_v3.py : modified mixup function: Gaussian Distribution with matrix(2 loss function)
-
+* ./mixup_v2.py : modified mixup function: Matrix-Mixup + Gaussian Distribution
 * ./train.py  
     (Modify line 25 during training. If you use the original mixup, change it to import mixup as mp
             Use the modified mixup to import mixup_v2 as mp)
@@ -50,7 +48,8 @@ model2-2 Matrix-Mixup + Gaussian Distribution(mixup_v2)    (ckpt.t7_ResNet18_epo
     CUDA_VISIBLE_DEVICES=0 python PGD_eval.py
 ```
 
-3、model2-1 test result：
+3、Test results with pgd attack: 
+model2-1 test result：
 Before PGD attack, accuracy: 91.58 %
 After PGD attack, accuracy: 18.56 %
 
