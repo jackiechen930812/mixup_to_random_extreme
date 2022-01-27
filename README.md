@@ -46,9 +46,12 @@ $ CUDA_VISIBLE_DEVICES=0 python train.py --lr=0.1 --seed=20170922 --decay=1e-4
 ```
 
 3、Test results with pgd attack: 
+
 model2-1 test result：
-Before PGD attack, accuracy: 91.58 %
-After PGD attack, accuracy: 18.56 %
+     
+     Before PGD attack, accuracy: 91.58 %
+     
+     After PGD attack, accuracy: 18.56 %
 
 model2-2 test result：
 
