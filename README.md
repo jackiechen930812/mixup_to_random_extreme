@@ -34,9 +34,11 @@ $ CUDA_VISIBLE_DEVICES=0 python train.py --lr=0.1 --seed=20170922 --decay=1e-4
 * ./checkpoint/ResNet18/
 
     model1-1 original mix-up + Gaussian Noise
+    
     model1-2 Matrix-Mixup + Gaussian Distribution + Gaussian Noise
 
     model2-1 original mix-up                      (ckpt.t7_ResNet18_epoch50_2_1_baseline_20220103)
+    
     model2-2 Matrix-Mixup + Gaussian Distribution(mixup_v2)    (ckpt.t7_ResNet18_epoch50_2_2_gua_matrix_20220103)
 
 ## Add adv samples for test
