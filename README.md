@@ -31,7 +31,7 @@ $ CUDA_VISIBLE_DEVICES=0 python train.py --lr=0.1 --seed=20170922 --decay=1e-4
 ```
 
 ## Add Gaussian Noise for comparison 
-##  ./checkpoint/ResNet18/
+* ./checkpoint/ResNet18/
 model1-1 original mix-up + Gaussian Noise
 model1-2 Matrix-Mixup + Gaussian Distribution + Gaussian Noise
 
