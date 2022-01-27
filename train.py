@@ -22,7 +22,11 @@ import torchvision.datasets as datasets
 import models
 from utils import progress_bar
 
-import mixup_v3 as mp
+import random
+from PIL import Image,ImageFilter
+import Gau_noise 
+
+import mixup_v2 as mp
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')  #0.02
@@ -42,7 +46,8 @@ parser.add_argument('--alpha', default=1., type=float,
                     help='mixup interpolation coefficient (default: 1)')
 args = parser.parse_args()
 
-use_cuda = torch.cuda.is_available()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# use_cuda = torch.cuda.is_available()
 
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -69,6 +74,7 @@ else:
 
 
 transform_test = transforms.Compose([
+    # Gau_noise.AddGaussianNoise(0.0, 1.0, 1.0),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -103,15 +109,20 @@ else:
 
 if not os.path.isdir('results'):
     os.mkdir('results')
-logname = ('results/log' +  '_' + args.model + '_epoch50_v3_'
+# logname = ('results/log' +  '_' + args.model + '_epoch50_2_1_baseline_'
+logname = ('results/log' +  '_' + args.model + '_epoch50_2_2_gua_matrix_'
            + str(args.seed) + '.csv')
 
-if use_cuda:
-    net.cuda()
-    net = torch.nn.DataParallel(net)
-    print(torch.cuda.device_count())
-    cudnn.benchmark = True
-    print('Using CUDA..')
+# if use_cuda:
+#     net.cuda()
+#     net = torch.nn.DataParallel(net)
+#     print(torch.cuda.device_count())
+#     cudnn.benchmark = True
+#     print('Using CUDA..')
+net = net.to(device)
+net = torch.nn.DataParallel(net)
+print(torch.cuda.device_count())
+cudnn.benchmark = True
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9,
@@ -148,15 +159,14 @@ def train(epoch):
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
+        # if use_cuda:
+        #     inputs, targets = inputs.cuda(), targets.cuda()
+        inputs, targets = inputs.to(device), targets.to(device)
 
-        # inputs, targets_a, targets_b, lam = mixup_data(inputs, targets,
-        #                                                args.alpha, use_cuda)
         inputs, targets_a, targets_b, lam = mp.mixup_data(inputs, targets,
-                                                       args.alpha, use_cuda)
-        inputs, targets_a, targets_b = map(Variable, (inputs,
-                                                      targets_a, targets_b))
+                                                       args.alpha)
+        # inputs, targets_a, targets_b = map(Variable, (inputs,
+        #                                               targets_a, targets_b))
         inputs = inputs.float() 
         outputs = net(inputs)
     #    loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
@@ -185,28 +195,28 @@ def test(epoch):
     test_loss = 0
     correct = 0
     total = 0
-    for batch_idx, (inputs, targets) in enumerate(testloader):
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
-        inputs, targets = Variable(inputs, volatile=True), Variable(targets)
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(testloader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            # inputs, targets = Variable(inputs, volatile=True), Variable(targets)
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
 
-        # test_loss += loss.data[0]
-        test_loss += loss.item()
-        _, predicted = torch.max(outputs.data, 1)
-        total += targets.size(0)
-        correct += predicted.eq(targets.data).cpu().sum()
+            # test_loss += loss.data[0]
+            test_loss += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
+            total += targets.size(0)
+            correct += predicted.eq(targets.data).cpu().sum()
 
-        progress_bar(batch_idx, len(testloader),
-                     'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                     % (test_loss/(batch_idx+1), 100.*correct/total,
-                        correct, total))
-    acc = 100.*correct/total
-    if epoch == start_epoch + args.epoch - 1 or acc > best_acc:
-        checkpoint(acc, epoch)
-    if acc > best_acc:
-        best_acc = acc
+            progress_bar(batch_idx, len(testloader),
+                        'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        % (test_loss/(batch_idx+1), 100.*correct/total,
+                            correct, total))
+        acc = 100.*correct/total
+        if epoch == start_epoch + args.epoch - 1 or acc > best_acc:
+            checkpoint(acc, epoch)
+        if acc > best_acc:
+            best_acc = acc
     return (test_loss/batch_idx, 100.*correct/total)
 
 
@@ -221,7 +231,8 @@ def checkpoint(acc, epoch):
     }
     if not os.path.isdir('checkpoint/ResNet18/'):
         os.mkdir('checkpoint/ResNet18/')
-    torch.save(state, './checkpoint/ResNet18/ckpt.t7' +  '_epoch50_v3_' + args.model + '_'
+    # torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_2_1_baseline'  + '_'
+    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_2_2_gua_matrix'  + '_'
                + str(args.seed))
 
 
