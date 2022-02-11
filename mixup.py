@@ -6,7 +6,7 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
-        # lam = np.random.normal(loc=0, scale=1.0)
+        # lam = np.random.normal(loc=0.5, scale=1.0)
     else:
         lam = 1
     # lam_average = np.mean(lam)

@@ -8,8 +8,7 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     # print("x_size",x.size())   #x_size torch.Size([128, 3, 32, 32])
     if alpha > 0:
-        lam = np.random.beta(alpha, alpha, x.size()[1] * x.size()[2] * x.size()[3])
-        # lam = np.random.normal(loc=0.5, scale=1.0, size=(x.size()[1] * x.size()[2] * x.size()[3]))
+        lam = np.random.normal(loc=0.5, scale=1.0, size=(x.size()[1] * x.size()[2] * x.size()[3]))
     else:
         lam = 1
     lam_average = np.mean(lam)
@@ -29,15 +28,15 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
     # mixed_x = lam * x + (1 - lam) * x[index, :]
     mixed_x = x.mul(lam) +  x[index, :].mul(lam_)
     # 保存mixup图像
-    # img_show.save_mix_image_tensor(x[0] , "./mixup_img/guassian/x1.png")
-    # img_show.save_mix_image_tensor(x[index[0]] , "./mixup_img/guassian/x2.png")
-    # img_show.save_mix_image_tensor(mixed_x[0] , "./mixup_img/guassian/mixup.png")
+    # img_show.save_mix_image_tensor(x[1] , "./mixup_img/guassian/a.png")
+    # img_show.save_mix_image_tensor(x[index[1]] , "./mixup_img/guassian/b.png")
+    # img_show.save_mix_image_tensor(mixed_x[1] , "./mixup_img/guassian/mixup.png")
     y_a, y_b = y, y[index]
     return mixed_x, y_a, y_b, lam_average
 
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-    # return criterion(pred, lam * y_a + (1 - lam)*y_b )
+
 
 
