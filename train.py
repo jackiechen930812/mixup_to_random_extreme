@@ -26,8 +26,12 @@ import random
 from PIL import Image,ImageFilter
 import Gau_noise 
 
+<<<<<<< HEAD
 import mixup as mp
 import mixup_v2 as mp_v2
+=======
+import mixup_v2 as mp
+>>>>>>> 6ba0baf0edc972d13e42a54073817dbfe9121015
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')  #0.02
@@ -75,7 +79,11 @@ else:
 
 
 transform_test = transforms.Compose([
+<<<<<<< HEAD
     # Gau_noise.AddGaussianNoise(0.0, 2.0, 1.0),
+=======
+    # Gau_noise.AddGaussianNoise(0.0, 1.0, 1.0),
+>>>>>>> 6ba0baf0edc972d13e42a54073817dbfe9121015
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -110,8 +118,13 @@ else:
 
 if not os.path.isdir('results'):
     os.mkdir('results')
+<<<<<<< HEAD
 logname = ('results/log' +  '_' + args.model + '_epoch50_newloss'
 # logname = ('results/log' +  '_' + args.model + '_epoch50_4_2_gua_matrix_2.0_'
+=======
+# logname = ('results/log' +  '_' + args.model + '_epoch50_2_1_baseline_'
+logname = ('results/log' +  '_' + args.model + '_epoch50_2_2_gua_matrix_'
+>>>>>>> 6ba0baf0edc972d13e42a54073817dbfe9121015
            + str(args.seed) + '.csv')
 
 # if use_cuda:
@@ -164,6 +177,7 @@ def train(epoch):
         #     inputs, targets = inputs.cuda(), targets.cuda()
         inputs, targets = inputs.to(device), targets.to(device)
 
+<<<<<<< HEAD
         inputs_v2, targets_a_v2, targets_b_v2, lam_v2 = mp_v2.mixup_data(inputs, targets, args.alpha)
         inputs_v1, targets_a_v1, targets_b_v1, lam_v1 = mp.mixup_data(inputs, targets, args.alpha)
         # inputs, targets_a, targets_b = map(Variable, (inputs, targets_a, targets_b))
@@ -187,6 +201,17 @@ def train(epoch):
         
         loss =  (loss_v2 +loss_or + loss_v1 ) / 3
 
+=======
+        inputs, targets_a, targets_b, lam = mp.mixup_data(inputs, targets,
+                                                       args.alpha)
+        # inputs, targets_a, targets_b = map(Variable, (inputs,
+        #                                               targets_a, targets_b))
+        inputs = inputs.float() 
+        outputs = net(inputs)
+    #    loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+        loss = mp.mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+        # train_loss += loss.data[0]
+>>>>>>> 6ba0baf0edc972d13e42a54073817dbfe9121015
         train_loss += loss.item()
         _, predicted = torch.max(outputs_v2.data, 1)
 
@@ -247,8 +272,13 @@ def checkpoint(acc, epoch):
     }
     if not os.path.isdir('checkpoint/ResNet18/'):
         os.mkdir('checkpoint/ResNet18/')
+<<<<<<< HEAD
     torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_newloss'  + '_'
     # torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_4_2_gua_matrix_2.0'  + '_'
+=======
+    # torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_2_1_baseline'  + '_'
+    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_2_2_gua_matrix'  + '_'
+>>>>>>> 6ba0baf0edc972d13e42a54073817dbfe9121015
                + str(args.seed))
 
 
