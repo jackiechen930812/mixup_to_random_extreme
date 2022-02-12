@@ -13,28 +13,25 @@
 
 * ./mixup_v2.py : modified mixup function: Matrix-Mixup + Gaussian Distribution
 
-* ./train.py  
+* ./train.py  : randomly choose mix-up method
     (Modify line 25 during training. If you use the original mixup, change it to import mixup as mp
             Use the modified mixup to import mixup_v2 as mp)
+* ./train_concat_all  : concatenate matrix mix-up images, original mix-up images and original images in on iteration
+* ./train_one_third.py  : one_third concatenation
+
 
 ## Training
 Use `python train.py` to train a new model.
 Here is an example setting:
 ```
-$ CUDA_VISIBLE_DEVICES=0 python train.py --lr=0.1 --seed=20170922 --decay=1e-4
+$ CUDA_VISIBLE_DEVICES=0 python train.py --lr=0.1 --seed=20220103 --decay=1e-4
 ```
 
-## Add Gaussian Noise for comparison 
-* ./checkpoint/ResNet18/
-
-    model1-1 original mix-up + Gaussian Noise
-    
-    model1-2 Matrix-Mixup + Gaussian Distribution + Gaussian Noise
-
-    model2-1 original mix-up                      (ckpt.t7_ResNet18_epoch50_2_1_baseline_20220103)
-    
-    model2-2 Matrix-Mixup + Gaussian Distribution(mixup_v2)    (ckpt.t7_ResNet18_epoch50_2_2_gua_matrix_20220103)
-
+## Generate mix-up images
+Uncomment Line :63,64,66,67 in train.py & Uncomment Line 30-33 in mixup_v2.py
+```
+$ python train.py --lr=0.1 --seed=20220103 --decay=1e-4 --epoch=1
+```
 ## Add adv samples for test
 1、install torchattacks
     pip install torchattacks
@@ -44,19 +41,5 @@ $ CUDA_VISIBLE_DEVICES=0 python train.py --lr=0.1 --seed=20170922 --decay=1e-4
 ```
     CUDA_VISIBLE_DEVICES=0 python PGD_eval.py
 ```
-
-3、Test results with pgd attack: 
-
-model2-1 test result：
-     
-     Before PGD attack, accuracy: 91.58 %
-     
-     After PGD attack, accuracy: 18.56 %
-
-model2-2 test result：
-
-    Before PGD attack, accuracy: 78.17 %
-
-    After PGD attack, accuracy: 24.47 %
 
 ## 

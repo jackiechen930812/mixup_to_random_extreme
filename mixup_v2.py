@@ -27,7 +27,10 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
         lam = torch.from_numpy(lam)
 
     mixed_x = x.mul(lam) +  x[index, :].mul(lam_)
-
+    # 保存mixup图像
+    # img_show.save_mix_image_tensor(x[0] , "./mixup_img/guassian/x1.png")
+    # img_show.save_mix_image_tensor(x[index[0]] , "./mixup_img/guassian/x2.png")
+    # img_show.save_mix_image_tensor(mixed_x[0] , "./mixup_img/guassian/mixup.png")
     y_a, y_b = y, y[index]
     return mixed_x, y_a, y_b, lam_average
 
