@@ -32,13 +32,14 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=10,
                                          shuffle=False, num_workers=8)
 
 # saved_model_path = './checkpoint/ResNet18/ckpt.t7_ResNet18_epoch50_2_1_baseline_20220103'
-saved_model_path = './checkpoint/ResNet18/ckpt.t7_ResNet18_epoch50_2_2_gua_matrix_20220103'
-pgd_saved_path = "./data/cifar10_test_pgd_2_2.pt"
+saved_model_path = 'checkpoint/ResNet18/ckpt.t7_ResNet18_epoch50_random_select_mixup_20220218'
+pgd_saved_path = "./data/cifar10_test_pgd_1_2.pt"
 if os.path.exists(pgd_saved_path) == False :
     checkpoint = torch.load(saved_model_path)
     net = checkpoint['net']
     net = net.eval().cuda()
-    atk = PGD(net, eps=8/255, alpha=2/255, steps=4)
+    # atk = PGD(net, eps=8/255, alpha=2/255, steps=4)
+    atk = PGD(net, eps=6.0/255, alpha=1.0/255, steps=40)
     atk.set_return_type('int') # Save as integer.
     atk.save(data_loader=testloader, save_path=pgd_saved_path, verbose=True)
 

@@ -110,7 +110,7 @@ else:
 
 if not os.path.isdir('results'):
     os.mkdir('results')
-logname = ('results/log' +  '_' + args.model + '_epoch50_newloss'
+logname = ('results/log' +  '_' + args.model + '_epoch50_concat_all_'
 # logname = ('results/log' +  '_' + args.model + '_epoch50_4_2_gua_matrix_2.0_'
            + str(args.seed) + '.csv')
 
@@ -247,7 +247,7 @@ def checkpoint(acc, epoch):
     }
     if not os.path.isdir('checkpoint/ResNet18/'):
         os.mkdir('checkpoint/ResNet18/')
-    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_newloss'  + '_'
+    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_concat_all'  + '_'
     # torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_4_2_gua_matrix_2.0'  + '_'
                + str(args.seed))
 

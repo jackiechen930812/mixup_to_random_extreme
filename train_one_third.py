@@ -74,7 +74,7 @@ else:
 
 
 transform_test = transforms.Compose([
-    Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
+    # Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])

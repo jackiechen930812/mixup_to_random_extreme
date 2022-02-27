@@ -1,9 +1,0 @@
-Loss function: lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-lr = 0.1
-epoch = 50
-                                              Train_acc    Test_acc
-original+Beta                                 70.2016      91.0900
-original+Gaussian(loc=0.5,scale=1.0)          3.51         12.38 （lr changed to 0.01）
-
-matrix + Beta                                 45.5257      81.5100
-matrix + Gaussian(loc=0.5,scale=1.0)          41.9415      78.4700
