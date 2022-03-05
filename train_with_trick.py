@@ -28,7 +28,7 @@ import Gau_noise
 
 import mixup as mp
 import mixup_v2 as mp_v2
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 # parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
