@@ -13,11 +13,8 @@
 
 * ./mixup_v2.py : modified mixup function: Matrix-Mixup + Gaussian Distribution
 
-* ./train.py  : randomly choose mix-up method
-    (Modify line 25 during training. If you use the original mixup, change it to import mixup as mp
-            Use the modified mixup to import mixup_v2 as mp)
-* ./train_concat_all  : concatenate matrix mix-up images, original mix-up images and original images in on iteration
-* ./train_one_third.py  : one_third concatenation
+* ./train.py  : one_third concatenation(matrix mix-up images, original mix-up images and original images in one iteration)
+    
 
 
 ## Training
