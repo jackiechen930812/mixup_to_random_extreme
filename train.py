@@ -28,7 +28,6 @@ import Gau_noise
 
 import mixup as mp
 import mixup_v2 as mp_v2
-import random
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')  #0.02
@@ -49,7 +48,6 @@ parser.add_argument('--alpha', default=1., type=float,
 args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -76,7 +74,7 @@ else:
 
 
 transform_test = transforms.Compose([
-    # Gau_noise.AddGaussianNoise(0.0, 2.0, 1.0),
+    # Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -111,7 +109,8 @@ else:
 
 if not os.path.isdir('results'):
     os.mkdir('results')
-logname = ('results/log' +  '_' + args.model + '_epoch50_random_select_mixup_'
+logname = ('results/log' +  '_' + args.model + '_epoch50_i3_gua8.0' + '_'
+# logname = ('results/log' +  '_' + args.model + '_epoch50_4_2_gua_matrix_2.0_'
            + str(args.seed) + '.csv')
 
 
@@ -124,7 +123,6 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9,
                       weight_decay=args.decay)
 
-
 def train(epoch):
     print('\nEpoch: %d' % epoch)
     net.train()
@@ -133,33 +131,42 @@ def train(epoch):
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        
         inputs, targets = inputs.to(device), targets.to(device)
+
+        batch_size = inputs.size()[0]
+        one_third = int(batch_size/3)
 
         inputs_v2, targets_a_v2, targets_b_v2, lam_v2 = mp_v2.mixup_data(inputs, targets, args.alpha)
         inputs_v1, targets_a_v1, targets_b_v1, lam_v1 = mp.mixup_data(inputs, targets, args.alpha)
         
+        inputs_mix = torch.cat( (inputs[:one_third], inputs_v1[one_third:2*one_third], inputs_v2[2*one_third:]), 0 ) 
+        inputs_mix = inputs_mix.float()
         inputs_v2 = inputs_v2.float() 
         inputs_v1 = inputs_v1.float()
         inputs_or = inputs.float()        
         
-        val = random.randint(0,2)
+        outputs_mix = net(inputs_mix)
+        outputs_or = outputs_mix[:one_third]
         
-        if val == 0:
-            outputs = net(inputs_v2)
-            loss = mp.mixup_criterion(criterion, outputs, targets_a_v2, targets_b_v2, lam_v2)
-        elif val == 1:
-            outputs = net(inputs_v1)
-            loss = mp.mixup_criterion(criterion, outputs, targets_a_v1, targets_b_v1, lam_v1)
-        else:
-            outputs = net(inputs_or)
-            loss = criterion(outputs, targets)
-       
+        outputs_v1 = outputs_mix[one_third:2*one_third]
+        outputs_v2 = outputs_mix[2*one_third:]        
+
+        loss_or = criterion(outputs_or, targets[:one_third])
+        loss_v1 = mp.mixup_criterion(criterion, outputs_v1, targets_a_v1[one_third:2*one_third], targets_b_v1[one_third:2*one_third], lam_v1)
+        loss_v2 = mp.mixup_criterion(criterion, outputs_v2, targets_a_v2[2*one_third:], targets_b_v2[2*one_third:], lam_v2)
+             
+        # print(loss_v2)
+        # print(loss_v1)
+        # print(loss_or)
+        
+        loss =  (loss_v2 +loss_or + loss_v1 ) / 3
+
         train_loss += loss.item()
-        _, predicted = torch.max(outputs.data, 1)
+        _, predicted = torch.max(outputs_v2.data, 1)
 
         total += targets.size(0)
-        correct += (lam_v2 * predicted.eq(targets_a_v2.data).cpu().sum().float() + (1 - lam_v2) * predicted.eq(targets_b_v2.data).cpu().sum().float())
+        correct += (lam_v2 * predicted.eq(targets_a_v2[2*one_third:].data).cpu().sum().float()
+                    + (1 - lam_v2) * predicted.eq(targets_b_v2[2*one_third:].data).cpu().sum().float())
 
         optimizer.zero_grad()
         loss.backward()
@@ -183,7 +190,7 @@ def test(epoch):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
-
+            
             test_loss += loss.item()
             _, predicted = torch.max(outputs.data, 1)
             total += targets.size(0)
@@ -212,7 +219,8 @@ def checkpoint(acc, epoch):
     }
     if not os.path.isdir('checkpoint/ResNet18/'):
         os.mkdir('checkpoint/ResNet18/')
-    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_random_select_mixup'  + '_'
+    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_i3_gua8.0'  + '_'
+    # torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_4_2_gua_matrix_2.0'  + '_'
                + str(args.seed))
 
 
