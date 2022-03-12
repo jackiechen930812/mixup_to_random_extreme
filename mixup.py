@@ -6,11 +6,9 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
-        # lam = np.random.normal(loc=0.5, scale=1.0)
     else:
         lam = 1
-    # lam_average = np.mean(lam)
-    # print("====>lam_avg", lam_average)
+
     batch_size = x.size()[0]
     if use_cuda:
         index = torch.randperm(batch_size).cuda()
@@ -18,10 +16,6 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
         index = torch.randperm(batch_size)
 
     mixed_x = lam * x + (1 - lam) * x[index, :]
-    # 保存mixup图像
-    # img_show.save_mix_image_tensor(x[0] , "./mixup_img/beta/x1.png")
-    # img_show.save_mix_image_tensor(x[index[0]] , "./mixup_img/beta/x2.png")
-    # img_show.save_mix_image_tensor(mixed_x[0] , "./mixup_img/beta/mixup.png")
     y_a, y_b = y, y[index]
     return mixed_x, y_a, y_b, lam
 

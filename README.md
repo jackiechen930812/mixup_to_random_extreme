@@ -13,7 +13,10 @@
 
 * ./mixup_v2.py : modified mixup function: Matrix-Mixup + Gaussian Distribution
 
-* ./train.py  : one_third concatenation(matrix mix-up images, original mix-up images and original images in one iteration)
+* ./train.py  : one_third concatenation(matrix mix-up images, original mix-up images and original images in one iteration
+
+* ./baseline.py: original mixup with/without tricks (--use_cutmix=True) to enable cutmix
+
     
 
 

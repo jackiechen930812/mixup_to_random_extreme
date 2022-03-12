@@ -23,37 +23,27 @@ import models
 from utils import progress_bar
 
 import random
-from PIL import Image, ImageFilter
-import Gau_noise
+from PIL import Image,ImageFilter
+import Gau_noise 
 
 import mixup as mp
-import mixup_v2 as mp_v2
-
-
+import cutmix as cx
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-# parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-# modify learning rate
-parser.add_argument('--lr', default=0.004, type=float, help='learning rate')  # 0.02
+# parser.add_argument('--lr', default=0.1, type=float, help='learning rate')  #0.02
+# change default lr rate
+parser.add_argument('--lr', default=0.004, type=float, help='learning rate')  #0.02
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 parser.add_argument('--model', default="ResNet18", type=str,
                     help='model type (default: ResNet18)')
 parser.add_argument('--name', default='0', type=str, help='name of run')
 parser.add_argument('--seed', default=0, type=int, help='random seed')
-parser.add_argument('--batch-size', default=128, type=int, help='batch size')  # 24
+parser.add_argument('--batch-size', default=128, type=int, help='batch size') #24
 parser.add_argument('--epoch', default=200, type=int,
                     help='total epochs to run')
 parser.add_argument('--no-augment', dest='augment', action='store_false',
                     help='use standard augmentation (default: True)')
-
-parser.add_argument('--smoothing', type=float, default=0.1,
-                    help='Label smoothing (default: 0.1)')
-parser.add_argument('--nb_classes', default=10, type=int,
-                    help='number of the classification types')
-
 parser.add_argument('--decay', default=1e-4, type=float, help='weight decay')
-# modify weight decay
-# parser.add_argument('--decay', default=0.05, type=float, help='weight decay')
 parser.add_argument('--alpha', default=1., type=float,
                     help='mixup interpolation coefficient (default: 1)')
 
@@ -71,17 +61,15 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 if args.seed != 0:
     torch.manual_seed(args.seed)
 
-
-
 class LabelSmoothingCrossEntropy(nn.Module):
     """
-    Cross Entropy loss with label smoothing
+    Cross Entropy loss with label smoothing.
     """
 
     def __init__(self, smoothing=0.1):
         """
-         Constructor for the LabelSmoothing module.
-         param: smoothing: label smoothing factor
+        Constructor for the LabelSmoothing module.
+        :param smoothing: label smoothing factor
         """
         super(LabelSmoothingCrossEntropy, self).__init__()
         assert 0.0 < smoothing < 1.0
@@ -89,16 +77,7 @@ class LabelSmoothingCrossEntropy(nn.Module):
         self.confidence = 1. - smoothing
 
     def forward(self, x, target):
-        """
-        method1
-        # logprobs = F.log_softmax(x, dim=-1)
-        # nll_loss = -logprobs.gather(dim=-1, index=target.unsqueeze(1))
-        # nll_loss = nll_loss.squeeze(1)  # 得到交叉熵损失
-        # smooth_loss = -logprobs.mean(dim=1)
-        # loss = self.confidence * nll_loss + self.smoothing * smooth_loss
-        """
         y_hat = torch.softmax(x, dim=1)
-        # 这里cross_loss和nll_loss等价
         cross_loss = self.cross_entropy(y_hat, target)
         smooth_loss = -torch.log(y_hat).mean(dim=1)
         loss = self.confidence * cross_loss + self.smoothing * smooth_loss
@@ -107,8 +86,6 @@ class LabelSmoothingCrossEntropy(nn.Module):
     def cross_entropy(self, y_hat, y):
         return - torch.log(y_hat[range(len(y_hat)), y])
 
-
-# l =  LabelSmoothingCrossEntropy(smoothing=0.1)
 # Data
 print('==> Preparing data..')
 if args.augment:
@@ -126,8 +103,9 @@ else:
                              (0.2023, 0.1994, 0.2010)),
     ])
 
+
 transform_test = transforms.Compose([
-    # Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
+    # Gau_noise.AddGaussianNoise(0.0, 1.0, 1.0),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -142,6 +120,7 @@ testset = datasets.CIFAR10(root='./data', train=False, download=False,
                            transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=10,
                                          shuffle=False, num_workers=8)
+
 
 # Model
 if args.resume:
@@ -161,8 +140,8 @@ else:
 
 if not os.path.isdir('results'):
     os.mkdir('results')
-logname = ('results/log' + '_' + args.model + '_epoch50_i3_no_gau_with_tirck' + '_'
-           # logname = ('results/log' +  '_' + args.model + '_epoch50_i3_gua_matrix_2.0_'
+# logname = ('results/log' +  '_' + args.model + '_epoch50_baseline_'
+logname = ('results/log' +  '_' + args.model + '_epoch50_baseline_with_tricks_'
            + str(args.seed) + '.csv')
 
 # if use_cuda:
@@ -171,35 +150,25 @@ logname = ('results/log' + '_' + args.model + '_epoch50_i3_no_gau_with_tirck' + 
 #     print(torch.cuda.device_count())
 #     cudnn.benchmark = True
 #     print('Using CUDA..')
-
 net = net.to(device)
 net = torch.nn.DataParallel(net)
 print(torch.cuda.device_count())
 cudnn.benchmark = True
 
 criterion = nn.CrossEntropyLoss()
-
-
-# # add label smoothing
-# criterion = LabelSmoothingCrossEntropy()
 # optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9,
 #                       weight_decay=args.decay)
 
-# modify optimization method
-optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr, betas=(0.9, 0.999), weight_decay=args.decay)
+# criterion = LabelSmoothingCrossEntropy()
+# change optimizer to AdamW, and set base lr rate to 0.004
+optimizer = optim.AdamW(net.parameters(), lr=args.lr, betas=(0.9, 0.999), weight_decay=args.decay)
 
-# import warm_up module
-import pytorch_warmup as warmup
-
-# add warmup_scheduler
-# warmup_scheduler = warmup.UntunedLinearWarmup(optimizer)
-
-# adjust lr_scheduler
-# import Consine Annealing lr scheduler
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
+scheduler = CosineAnnealingLR(optimizer, T_max=5, eta_min=0)  # Tmax
 
-scheduler = CosineAnnealingLR(optimizer, T_max=5, eta_min=0)
-
+# # add warmup_scheduler
+import pytorch_warmup as warmup
+warmup_scheduler = warmup.UntunedLinearWarmup(optimizer)
 
 # def mixup_data(x, y, alpha=1.0, use_cuda=True):
 #     '''Returns mixed inputs, pairs of targets, and lambda'''
@@ -234,57 +203,40 @@ def train(epoch):
         # if use_cuda:
         #     inputs, targets = inputs.cuda(), targets.cuda()
         inputs, targets = inputs.to(device), targets.to(device)
-        # concatenating 3 type images: original, original mixup, matrix mixup
-        batch_size = inputs.size()[0]
-        one_third = int(batch_size / 3)
-
-        inputs_v2, targets_a_v2, targets_b_v2, lam_v2 = mp_v2.mixup_data(inputs, targets, args.alpha)
-        inputs_v1, targets_a_v1, targets_b_v1, lam_v1 = mp.mixup_data(inputs, targets, args.alpha)
-        # inputs, targets_a, targets_b = map(Variable, (inputs, targets_a, targets_b))
-
-        inputs_mix = torch.cat((inputs[:one_third], inputs_v1[one_third:2 * one_third], inputs_v2[2 * one_third:]), 0)
-        inputs_mix = inputs_mix.float()
-        inputs_v2 = inputs_v2.float()
-        inputs_v1 = inputs_v1.float()
-        inputs_or = inputs.float()
-
-        outputs_mix = net(inputs_mix)
-        outputs_or = outputs_mix[:one_third]
-
-        outputs_v1 = outputs_mix[one_third:2 * one_third]
-        outputs_v2 = outputs_mix[2 * one_third:]
-
-        loss_or = criterion(outputs_or, targets[:one_third])
-        loss_v1 = mp.mixup_criterion(criterion, outputs_v1, targets_a_v1[one_third:2 * one_third],
-                                     targets_b_v1[one_third:2 * one_third], lam_v1)
-        loss_v2 = mp.mixup_criterion(criterion, outputs_v2, targets_a_v2[2 * one_third:], targets_b_v2[2 * one_third:],
-                                     lam_v2)
-
-        # print(loss_v2)
-        # print(loss_v1)
-        # print(loss_or)
-
-        loss = (loss_v2 + loss_or + loss_v1) / 3
+        if not args.use_cutmix:
+            inputs, targets_a, targets_b, lam = mp.mixup_data(inputs, targets,
+                                                              args.alpha)
+            inputs = inputs.float()
+            outputs = net(inputs)
+            loss = mp.mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+        else:
+            inputs, lam = cx.mixup_data(inputs, targets, args.alpha)
+            inputs = inputs.float()
+            outputs = net(inputs)
+            loss = cx.mixup_criterion(criterion, outputs, targets, lam)
+            # inputs, targets_a, targets_b = map(Variable, (inputs,
+            #                                           targets_a, targets_b))
 
         train_loss += loss.item()
-        _, predicted = torch.max(outputs_v2.data, 1)
-
+        _, predicted = torch.max(outputs.data, 1)
         total += targets.size(0)
-        correct += (lam_v2 * predicted.eq(targets_a_v2[2 * one_third:].data).cpu().sum().float()
-                    + (1 - lam_v2) * predicted.eq(targets_b_v2[2 * one_third:].data).cpu().sum().float())
+        correct = 0.0
+        # correct += (lam * predicted.eq(targets_a.data).cpu().sum().float()
+        #             + (1 - lam) * predicted.eq(targets_b.data).cpu().sum().float())
 
         optimizer.zero_grad()
         loss.backward()
+        # add gradient clip or not
+        # nn.utils.clip_grad_norm_(net.parameters(), max_norm=20, norm_type=2)
         optimizer.step()
-
         # add warmup_scheduler
-        # warmup_scheduler.dampen()
+        warmup_scheduler.dampen()
         progress_bar(batch_idx, len(trainloader),
                      'Loss: %.3f | Reg: %.5f | Acc: %.3f%% (%d/%d)'
-                     % (train_loss / (batch_idx + 1), reg_loss / (batch_idx + 1),
-                        100. * correct / total, correct, total))
+                     % (train_loss/(batch_idx+1), reg_loss/(batch_idx+1),
+                        100.*correct/total, correct, total))
     scheduler.step()
-    return (train_loss / batch_idx, reg_loss / batch_idx, 100. * correct / total)
+    return (train_loss/batch_idx, reg_loss/batch_idx, 100.*correct/total)
 
 
 def test(epoch):
@@ -307,15 +259,15 @@ def test(epoch):
             correct += predicted.eq(targets.data).cpu().sum()
 
             progress_bar(batch_idx, len(testloader),
-                         'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss / (batch_idx + 1), 100. * correct / total,
+                        'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        % (test_loss/(batch_idx+1), 100.*correct/total,
                             correct, total))
-        acc = 100. * correct / total
+        acc = 100.*correct/total
         if epoch == start_epoch + args.epoch - 1 or acc > best_acc:
             checkpoint(acc, epoch)
         if acc > best_acc:
             best_acc = acc
-    return (test_loss / batch_idx, 100. * correct / total)
+    return (test_loss/batch_idx, 100.*correct/total)
 
 
 def checkpoint(acc, epoch):
@@ -329,8 +281,8 @@ def checkpoint(acc, epoch):
     }
     if not os.path.isdir('checkpoint/ResNet18/'):
         os.mkdir('checkpoint/ResNet18/')
-    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' + args.model + '_epoch50_i3_no_gau_with_trick' + '_'
-               # torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_4_2_gua_matrix_2.0'  + '_'
+    # torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_baseline'  + '_'
+    torch.save(state, './checkpoint/ResNet18/ckpt.t7_' +  args.model + '_epoch50_baseline_trick'  + '_'
                + str(args.seed))
 
 
