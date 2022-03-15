@@ -156,10 +156,10 @@ print(torch.cuda.device_count())
 cudnn.benchmark = True
 
 criterion = nn.CrossEntropyLoss()
+# criterion = LabelSmoothingCrossEntropy()
+
 # optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9,
 #                       weight_decay=args.decay)
-
-# criterion = LabelSmoothingCrossEntropy()
 # change optimizer to AdamW, and set base lr rate to 0.004
 optimizer = optim.AdamW(net.parameters(), lr=args.lr, betas=(0.9, 0.999), weight_decay=args.decay)
 
@@ -235,7 +235,7 @@ def train(epoch):
                      'Loss: %.3f | Reg: %.5f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), reg_loss/(batch_idx+1),
                         100.*correct/total, correct, total))
-    scheduler.step()
+    # scheduler.step()
     return (train_loss/batch_idx, reg_loss/batch_idx, 100.*correct/total)
 
 
