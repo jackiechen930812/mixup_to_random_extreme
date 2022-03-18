@@ -17,12 +17,14 @@ import torchvision.datasets as datasets
 import torchattacks
 from torchattacks import PGD
 import models
+import Gau_noise
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')   #防止生成adv样本时报错 https://github.com/pytorch/pytorch/issues/11201
 
 transform_test = transforms.Compose([
-    transforms.ToTensor(),
+    # Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
+    transforms.ToTensor(), #255 1
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
@@ -31,16 +33,16 @@ testset = datasets.CIFAR10(root='./data', train=False, download=False,
 testloader = torch.utils.data.DataLoader(testset, batch_size=10,
                                          shuffle=False, num_workers=8)
 
-# saved_model_path = './checkpoint/ResNet18/ckpt.t7_ResNet18_epoch50_2_1_baseline_20220103'
-saved_model_path = 'checkpoint/ResNet18/ckpt.t7_ResNet18_epoch50_random_select_mixup_20220218'
-pgd_saved_path = "./data/cifar10_test_pgd_1_2.pt"
+# saved_model_path = './checkpoint/ResNet18/ckpt.t7_ResNet18_epoch50_2_1_baseline_20220103'  
+saved_model_path = './checkpoint/ResNet18/ckpt.pth_ResNet18_epoch200_matrix_20220316'
+pgd_saved_path = "./data/cifar10_test_pgd_1-0.pt"
 if os.path.exists(pgd_saved_path) == False :
     checkpoint = torch.load(saved_model_path)
     net = checkpoint['net']
-    net = net.eval().cuda()
+    net = net.eval()
     # atk = PGD(net, eps=8/255, alpha=2/255, steps=4)
-    atk = PGD(net, eps=6.0/255, alpha=1.0/255, steps=40)
-    atk.set_return_type('int') # Save as integer.
+    atk = PGD(net, eps=6.0 / 255, alpha=1.0 / 255, steps=40)
+    atk.set_return_type('int') # 0-255 Save as integer. float 0-1
     atk.save(data_loader=testloader, save_path=pgd_saved_path, verbose=True)
 
 
