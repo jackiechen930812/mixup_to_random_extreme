@@ -1,23 +1,14 @@
-## 生成低频高频攻击数据：frequency.py
-* 代码基本都是来自github上frequencyHelper.py ，对数据保存的地址进行了修改
-* 代码108行加了一行生成测试数据标签的代码，方便后续模型测试
-* 运行：
+## Generate High and Low frequency data：frequency.py
+* All code are from : github上frequencyHelper.py ，do some modification for data store location
+* adds a line of code to generate test data labels to facilitate subsequent model testing
+* Run with：
     python frequency.py
-    生成数据存放与./data/CIFAR10/下
+    data is kept in: ./data/CIFAR10/
 
-## 创建新的dataset的类： new_dataset.py
-* 用于读取frequency.py生成的数据，并处理为能被dataloader加载的形式
-* 由于github代码上会将几个生成的数据拼接为一个(如train_data_low_4和train_data_high_4等相拼接)，所以在new_dataset.py中加了一个__add__函数
-* 代码内容见注释
+## create new dataset： new_dataset.py
+* used for parse the generated data from frequency.py, and processed into a form that can be loaded by dataloader
 
-## 在train.py中使用生成的数据进行训练
-* 65-103行为新添加的部分
-* 65行use_frequency_data参数控制是否使用生成的数据，True使用，False使用原数据
-* 将train_data_low_4.npy train_data_high_4.npy 及73行radius列表中对应后缀的npy数据进行拼接,之后放入dataloader
-* test时加载与train相同的数据后缀
-* 其他：
-    28行中引入创建的New_Dataset类
-    178-179行、197-201行将target转化为long的格式，cutmix在cutmix.py的52行已经进行了转化。 ————不加会报错
+## Use the generated data for training in train.py
 
 <!-- 
 ## Requirements and Installation
