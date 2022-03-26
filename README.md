@@ -2,7 +2,10 @@
 * All code are from : frequencyHelper.py ，(https://github.com/HaohanWang/HFC/tree/master/utility) do some modification for data store location
 * adds a line of code to generate test data labels to facilitate subsequent model testing
 * Run with：
+    ```
     python frequency.py
+    
+    ```
     data is kept in: ./data/CIFAR10/
 
 ## Create new dataset： new_dataset.py
