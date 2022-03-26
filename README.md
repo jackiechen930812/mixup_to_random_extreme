@@ -1,5 +1,5 @@
 ## Generate High and Low frequency data：frequency.py
-* All code are from : frequencyHelper.py ，(https://github.com/HaohanWang/HFC/tree/master/utility) do some modification for data store location
+* All code are from : frequencyHelper.py ，(https://github.com/HaohanWang/HFC/tree/master/utility) , only do some minor modifications for data store location
 * adds a line of code to generate test data labels to facilitate subsequent model testing
 * Run with：
     ```
