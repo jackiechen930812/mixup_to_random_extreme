@@ -9,6 +9,7 @@
 * used for parse the generated data from frequency.py, and processed into a form that can be loaded by dataloader
 
 ## Use the generated data for training in train.py
+* add a button for using frequency or not in training process
 
 ## Requirements and Installation
 * A computer running macOS or Linux
@@ -28,9 +29,6 @@
 * ./train.py  : one_third concatenation(matrix mix-up images, original mix-up images and original images in one iteration
 
 * ./baseline.py: original mixup with/without tricks (--use_cutmix=True) to enable cutmix
-
-    
-
 
 ## Training
 Use `python train.py` to train a new model.
