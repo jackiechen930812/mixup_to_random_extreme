@@ -24,6 +24,9 @@ import Gau_noise
 import mixup as mp
 import cutmix as cx
 import mixup_v2 as mp_v2
+
+from new_dataset import New_Dataset
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
@@ -58,20 +61,51 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR10(
-    root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CIFAR10(
-    root='./data', train=False, download=True, transform=transform_test)
+use_frequency_data = True
+
+if use_frequency_data:
+    # 加载生成的后缀为4的npy数据
+    trainset = New_Dataset('./data/CIFAR10/train_data_low_4.npy','./data/CIFAR10/train_label.npy',transform_train)
+    trainset_high_4 = New_Dataset('./data/CIFAR10/train_data_high_4.npy','./data/CIFAR10/train_label.npy',transform_train)
+    trainset = trainset.__add__(trainset_high_4)     #将trainset_high_4数据集拼接在trainset后
+
+    radius = [ 8, 12, 16]       #还要加载的其他后缀的数据，后缀可在这个列表中修改，源代码中默认加载4、8、12、16
+
+    for r in radius:
+        train_low = './data/CIFAR10/train_data_low_' + str(r) + '.npy'  #要加载的数据地址
+        train_high = './data/CIFAR10/train_data_high_' + str(r) + '.npy'
+        trainset_low = New_Dataset(train_low,'./data/CIFAR10/train_label.npy',transform_train) #加载
+        trainset = trainset.__add__(trainset_low) #拼接
+        trainset_high = New_Dataset(train_high,'./data/CIFAR10/train_label.npy',transform_train)
+        trainset = trainset.__add__(trainset_high)
+    
+    #testset部分与trainset相对应
+    testset = New_Dataset('./data/CIFAR10/test_data_low_4.npy','./data/CIFAR10/test_label.npy',transform_test)
+    testset_high_4 = New_Dataset('./data/CIFAR10/test_data_high_4.npy','./data/CIFAR10/test_label.npy',transform_test)
+    testset = testset.__add__(testset_high_4) 
+    for r in radius:
+        test_low = './data/CIFAR10/test_data_low_' + str(r) + '.npy'
+        test_high = './data/CIFAR10/test_data_high_' + str(r) + '.npy'
+        testset_low = New_Dataset(test_low,'./data/CIFAR10/test_label.npy',transform_test)
+        testset = testset.__add__(testset_low)
+        testset_high = New_Dataset(test_high,'./data/CIFAR10/test_label.npy',transform_test)
+        testset = testset.__add__(testset_high)    
+else:
+    trainset = torchvision.datasets.CIFAR10(
+        root='./data', train=True, download=True, transform=transform_train)
+    testset = torchvision.datasets.CIFAR10(
+        root='./data', train=False, download=True, transform=transform_test)
+
+trainloader = torch.utils.data.DataLoader(
+        trainset, batch_size=128, shuffle=True, num_workers=2)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=2)
+        testset, batch_size=100, shuffle=False, num_workers=2)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
 
-# Model
+# 
 print('==> Building model..')
 # net = VGG('VGG19')
 # net = ResNet18()
@@ -141,6 +175,8 @@ def train(epoch):
                                                               args.alpha)
             inputs = inputs.float()
             outputs = net(inputs)
+            targets_a = targets_a.long()
+            targets_b = targets_b.long()
             loss = mp.mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
             train_loss += loss.item()
             _, predicted = outputs.max(1)
@@ -158,6 +194,11 @@ def train(epoch):
             one_third = int(batch_size / 3)
             inputs_v2, targets_a_v2, targets_b_v2, lam_v2 = mp_v2.mixup_data(inputs, targets, args.alpha)
             inputs_v1, targets_a_v1, targets_b_v1, lam_v1 = mp.mixup_data(inputs, targets, args.alpha)
+            targets = targets.long()
+            targets_a_v1 = targets_a_v1.long()
+            targets_a_v2 = targets_a_v2.long()
+            targets_b_v1 = targets_b_v1.long()
+            targets_b_v2 = targets_b_v2.long()
 
             inputs_mix = torch.cat((inputs[:one_third], inputs_v1[one_third:2 * one_third], inputs_v2[2 * one_third:]), 0)
             inputs_mix = inputs_mix.float()
