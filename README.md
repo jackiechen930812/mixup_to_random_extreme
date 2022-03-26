@@ -10,7 +10,6 @@
 
 ## Use the generated data for training in train.py
 
-<!-- 
 ## Requirements and Installation
 * A computer running macOS or Linux
 * For training new models,  you'll also need a NVIDIA GPU and [NCCL](https://github.com/NVIDIA/nccl)
