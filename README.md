@@ -5,7 +5,7 @@
     python frequency.py
     data is kept in: ./data/CIFAR10/
 
-## create new dataset： new_dataset.py
+## Create new dataset： new_dataset.py
 * used for parse the generated data from frequency.py, and processed into a form that can be loaded by dataloader
 
 ## Use the generated data for training in train.py
