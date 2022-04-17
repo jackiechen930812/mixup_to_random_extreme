@@ -1,19 +1,3 @@
-## Generate High and Low frequency data：frequency.py
-* All code are from : frequencyHelper.py ，(https://github.com/HaohanWang/HFC/tree/master/utility) , only do some minor modifications for data store location
-* adds a line of code to generate test data labels to facilitate subsequent model testing
-* Run with：
-    ```
-    python frequency.py
-    
-    ```
-    data is kept in: ./data/CIFAR10/
-
-## Create new dataset： new_dataset.py
-* used for parse the generated data from frequency.py, and processed into a form that can be loaded by dataloader
-
-## Use the generated data for training in train.py
-* add a button for using frequency or not in training process
-
 ## Requirements and Installation
 * A computer running macOS or Linux
 * For training new models,  you'll also need a NVIDIA GPU and [NCCL](https://github.com/NVIDIA/nccl)
@@ -54,5 +38,21 @@ $ python train.py --lr=0.1 --seed=20220103 --decay=1e-4 --epoch=1
 ```
     CUDA_VISIBLE_DEVICES=0 python PGD_eval.py
 ```
+
+## Generate High and Low frequency data：frequency.py
+* All code are from : frequencyHelper.py ，(https://github.com/HaohanWang/HFC/tree/master/utility) , only do some minor modifications for data store location
+* adds a line of code to generate test data labels to facilitate subsequent model testing
+* Run with：
+    ```
+    python frequency.py
+    
+    ```
+    data is kept in: ./data/CIFAR10/
+
+## Create new dataset： new_dataset.py
+* used for parse the generated data from frequency.py, and processed into a form that can be loaded by dataloader
+
+## Use the generated data for training in train.py
+* add a button for using frequency or not in training process
 
 ## 
