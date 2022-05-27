@@ -14,48 +14,75 @@ import os
 import csv
 import argparse
 
-from torch.utils.data.distributed import DistributedSampler
-
+from models import *
 from utils import progress_bar
-
+import matplotlib.pyplot as plt
 import random
 from PIL import Image,ImageFilter
 
-import Gau_noise
 import mixup as mp
 import cutmix as cx
 import mixup_v2 as mp_v2
+import mixup_v3 as mp_v3
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--lr', default=0.025, type=float, help='learning rate')
+parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 parser.add_argument('--name', default='0', type=str, help='name of run')
 parser.add_argument('--seed', default=0, type=int, help='random seed')
-parser.add_argument('--model', default="resnest101", type=str,
+parser.add_argument('--model', default="ResNet18", type=str,
                     help='model type (default: ResNet18)')
 parser.add_argument('--alpha', default=1., type=float,
                     help='mixup interpolation coefficient (default: 1)')
 parser.add_argument('--mixup', type=str, default='ori', help='mixup method')
-parser.add_argument('--epoch', default=100, type=int,
+parser.add_argument('--epoch', default=200, type=int,
                     help='total epochs to run')
-parser.add_argument('--input_size', default=224, type=int,
-                    help='the size of input image')
-parser.add_argument('--batch_size', default=32, type=int,
-                    help='total epochs to run')                   
-parser.add_argument('--local_rank', type=int, default=0)
+parser.add_argument('--slice_num', default=3, type=int,
+                    help='number of image slice in mixup_v3')
+
 args = parser.parse_args()
 
-# device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
-# Data
-# print('==> Preparing data..')
 
-# # Model
-# print('==> Building model..')
+
+# Data
+print('==> Preparing data..')
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
+
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
+
+trainset = torchvision.datasets.CIFAR10(
+    root='./data', train=True, download=True, transform=transform_train)
+trainloader = torch.utils.data.DataLoader(
+    trainset, batch_size=128, shuffle=True, num_workers=0)
+train_features, train_labels = next(iter(trainloader))
+print(f"Feature batch shape: {train_features.size()}")
+print(f"Labels batch shape: {train_labels.size()}")
+
+testset = torchvision.datasets.CIFAR10(
+    root='./data', train=False, download=True, transform=transform_test)
+testloader = torch.utils.data.DataLoader(
+    testset, batch_size=1, shuffle=False, num_workers=0)
+
+classes = ('plane', 'car', 'bird', 'cat', 'deer',
+           'dog', 'frog', 'horse', 'ship', 'truck')
+
+# Model
+print('==> Building model..')
 # net = VGG('VGG19')
-# net = ResNet18()
+net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -74,88 +101,42 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 #     net = torch.nn.DataParallel(net)
 #     cudnn.benchmark = True
 
-# if args.resume:
-#     # Load checkpoint.
-#     print('==> Resuming from checkpoint..')
-#     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-#     checkpoint = torch.load('./checkpoint/ckpt.pth' + args.name + '_'
-#                             + str(args.seed))
-#     # net.load_state_dict(checkpoint['net'])
-#     net = checkpoint['net']
-#     best_acc = checkpoint['acc']
-#     start_epoch = checkpoint['epoch'] + 1
-#     rng_state = checkpoint['rng_state']
-#     torch.set_rng_state(rng_state)
-# else:
-#     print('==> Building model..')
-#     net = models.__dict__[args.model]()
-#     # net = get_model(args.model)
-#     net = net.to(device)
+if args.resume:
+    # Load checkpoint.
+    print('==> Resuming from checkpoint..')
+    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
+    checkpoint = torch.load('./checkpoint/ResNet/ckpt.pth_' + args.model + '_' + str(args.epoch) + '_'
+                       + str(args.seed))
+    # net.load_state_dict(checkpoint['net'])
+    net = checkpoint['net']
+    best_acc = checkpoint['acc']
+    start_epoch = checkpoint['epoch'] + 1
+    rng_state = checkpoint['rng_state']
+    torch.set_rng_state(rng_state)
+else:
+    print('==> Building model..')
+    net = models.__dict__[args.model]()
 
-
-# 使用DDP进行多进程分布式训练，local_rank表示系统自动分配的进程号，
-torch.cuda.set_device(args.local_rank)  # 这里设定每一个进程使用的GPU是一定的，即一张gpu一个进程
-device = torch.device('cuda', args.local_rank)
-torch.distributed.init_process_group(backend='nccl') #初始化
-
-# 固定随机种子，使用相同的参数进行不同进程上模型的初始化
-seed = args.seed
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
-
-net = models.__dict__[args.model]()
 net = net.to(device)
-
-
-transform_train = transforms.Compose([
-    transforms.Resize([args.input_size,args.input_size]), 
-    transforms.RandomCrop([args.input_size,args.input_size], padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-transform_test = transforms.Compose([
-    # Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
-    transforms.Resize([args.input_size,args.input_size]), 
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-batch_size = args.batch_size
-trainset = torchvision.datasets.ImageFolder('./imagenet-1k/train/',transform=transform_train)
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=batch_size, num_workers=2,sampler=DistributedSampler(trainset)) # 这个sampler会自动分配数据到各个gpu上
-
-testset = torchvision.datasets.ImageFolder('./imagenet-1k/val/',transform=transform_test)
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=batch_size,  num_workers=2,sampler=DistributedSampler(testset,shuffle=False))
-
-net = torch.nn.parallel.DistributedDataParallel(net,
-                                        device_ids=[args.local_rank], 
-                                        output_device=args.local_rank,
-                                        find_unused_parameters=True) #将模型分布到多张gpu上
-
-cudnn.benchmark = True
+if device == 'cuda':
+    net = torch.nn.DataParallel(net)
+    cudnn.benchmark = True
 
 if not os.path.isdir('results'):
     os.mkdir('results')
-logname = ('results/log' +  '_' + args.model + '_epoch200_' + str(args.mixup)
+logname = ('results/log' +  '_' + args.model + '_' + str(args.epoch) + '_' + args.mixup + '_'
            + str(args.seed) + '.csv')
 
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=1e-4)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+                      momentum=0.9, weight_decay=5e-4)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 
 # Training
 def train(epoch):
-    if args.local_rank == 0:  #仅显示第一个进程的训练过程，都显示的话会非常混乱
-        print('\nEpoch: %d' % epoch)
+    print('\nEpoch: %d' % epoch)
     net.train()
     train_loss = 0
     reg_loss = 0
@@ -163,10 +144,9 @@ def train(epoch):
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
-        #print(inputs.shape)
         if args.mixup == 'ori':
-            inputs, targets_a, targets_b, lam = mp.mixup_data(inputs, targets,
-                                                              args.alpha)
+            inputs, targets_a, targets_b, lam = mp_v3.mixup_data(inputs, targets,
+                                                              args.slice_num)
             inputs = inputs.float()
             outputs = net(inputs)
             loss = mp.mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
@@ -206,6 +186,16 @@ def train(epoch):
             loss = (loss_v2 + loss_or + loss_v1) / 3
             train_loss += loss.item()
             _, predicted = torch.max(outputs_v2.data, 1)
+        
+        elif args.mixup == 'slice':
+            inputs, targets_a, targets_b, lam = mp_v3.mixup_data(inputs, targets,
+                                                              args.slice_num)
+            inputs = inputs.float()
+            outputs = net(inputs)
+            loss = mp.mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+            train_loss += loss.item()
+            _, predicted = outputs.max(1)
+
         else:
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -224,11 +214,11 @@ def train(epoch):
 
         # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
         #              % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-        if args.local_rank == 0:  #仅显示第一个进程的训练过程，都显示的话会非常混乱
-            progress_bar(batch_idx, len(trainloader),
-                        'Loss: %.3f | Reg: %.5f | Acc: %.3f%% (%d/%d)'
-                        % (train_loss / (batch_idx + 1), reg_loss / (batch_idx + 1),
-                            100. * correct / total, correct, total))
+
+        progress_bar(batch_idx, len(trainloader),
+                     'Loss: %.3f | Reg: %.5f | Acc: %.3f%% (%d/%d)'
+                     % (train_loss / (batch_idx + 1), reg_loss / (batch_idx + 1),
+                        100. * correct / total, correct, total))
 
     return (train_loss / batch_idx, reg_loss / batch_idx, 100. * correct / total)
 
@@ -238,12 +228,19 @@ def test(epoch):
     test_loss = 0
     correct = 0
     total = 0
+
+    wrong_img_list = []
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
+            # for precisely finding the wrong img, set batchsize as 1
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
+            ###################################
+            pred = torch.max(outputs,dim=1)[1]
+            if (targets - pred) != 0:  # when the result is 0, it's correct, and vice versa
+                wrong_img_list.append(batch_idx)
+            ###################################
             loss = criterion(outputs, targets)
-
             test_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
@@ -251,32 +248,28 @@ def test(epoch):
 
             # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             #              % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-            if args.local_rank == 0:
-                progress_bar(batch_idx, len(testloader),
-                            'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                            % (test_loss / (batch_idx + 1), 100. * correct / total,
-                                correct, total))
+            progress_bar(batch_idx, len(testloader),
+                         'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                         % (test_loss / (batch_idx + 1), 100. * correct / total,
+                            correct, total))
 
     # Save checkpoint.
-    if args.local_rank == 0:
-        acc = 100.*correct/total
-        if acc > best_acc:
-            print('Saving..')
-            state = {
-                # 'net': net.state_dict(),
-                'net': net,
-                'acc': acc,
-                'epoch': epoch,
-            }
-            if not os.path.isdir('checkpoint/ResNet18/'):
-                os.mkdir('checkpoint/ResNet18/')
+    acc = 100.*correct/total
+    if acc > best_acc:
+        print('Saving..')
+        state = {
+            # 'net': net.state_dict(),
+            'net': net,
+            'acc': acc,
+            'epoch': epoch,
+        }
+        if not os.path.isdir('checkpoint/ResNet/'):
+            os.mkdir('checkpoint/ResNet/')
 
-            torch.save(state, './checkpoint/ResNet18/ckpt.pth_' + args.model + '_epoch200_none' + '_'
-                    + str(args.seed))
-            best_acc = acc
-    return (test_loss / batch_idx, 100. * correct / total)
-
-
+        torch.save(state, './checkpoint/ResNet/ckpt.pth_' + args.model + '_' + str(args.epoch) + '_'
+                   + str(args.seed))
+        best_acc = acc
+    return (test_loss / batch_idx, 100. * correct / total, wrong_img_list)
 
 if not os.path.exists(logname):
     with open(logname, 'w') as logfile:
@@ -284,15 +277,23 @@ if not os.path.exists(logname):
         logwriter.writerow(['epoch', 'train loss', 'reg loss', 'train acc',
                             'test loss', 'test acc'])
 
-
 for epoch in range(start_epoch, args.epoch):
     train_loss, reg_loss, train_acc = train(epoch)
-    test_loss, test_acc = test(epoch)
+    test_loss, test_acc, wrong_img_list = test(epoch)
+
+    #########################
+    if epoch == 199:
+        for i in wrong_img_list:
+            print(i)
+            image = testloader.dataset.data[i]
+            plt.imshow(image)
+            plt.show()
+    #########################
+
     with open(logname, 'a') as logfile:
-        if args.local_rank == 0: #仅记录第一个进程的测试结果，由于参数共享，不同进程测试结果相同，无需重复保存
-            logwriter = csv.writer(logfile, delimiter=',')
-            logwriter.writerow([epoch, train_loss, reg_loss, train_acc, test_loss,
-                                test_acc])
+        logwriter = csv.writer(logfile, delimiter=',')
+        logwriter.writerow([epoch, train_loss, reg_loss, train_acc, test_loss,
+                            test_acc])
         scheduler.step()
 
 
