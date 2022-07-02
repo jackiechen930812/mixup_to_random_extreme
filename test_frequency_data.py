@@ -23,7 +23,7 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-saved_model_path = './checkpoint/ResNet18/ckpt.pth_ResNet18_epoch200_none_20220328'
+saved_model_path = './checkpoint/ckpt.pthResNet18_200_one_fourth_20220520'
 
 radius = [4, 8, 12, 16, 20, 24, 28]
 for r in radius:

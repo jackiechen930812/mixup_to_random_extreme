@@ -19,18 +19,40 @@ from utils import progress_bar
 import matplotlib.pyplot as plt
 import random
 from PIL import Image,ImageFilter
+from multiprocessing import Pool
 
 import mixup as mp
 import mixup_v3 as mp_v3
 import mixup_v2 as mp_v2
+
+from comix.load_data import load_data_subset
+from comix.logger import plotting, copy_script_to_folder, AverageMeter, RecorderMeter, time_string, convert_secs2time
+from comix.utils import to_one_hot, distance
+from comix.mixup import mixup_process
+from puzzlemix.mixup import to_one_hot as to_one_hot_p
+from puzzlemix.mixup import mixup_process as mixup_process_p
+from puzzlemix.mixup import get_lambda as get_lambda_p
+
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
                     help='resume from checkpoint')
 parser.add_argument('--name', default='0', type=str, help='name of run')
 parser.add_argument('--seed', default=0, type=int, help='random seed')
-parser.add_argument('--model', default="resnest50", type=str,
-                    help='model type (default: resnest50)')
+parser.add_argument('--model', default="ResNet18", type=str,
+                    help='model type (default: ResNet18)')
 parser.add_argument('--alpha', default=1., type=float,
                     help='mixup interpolation coefficient (default: 1)')
 parser.add_argument('--mixup', type=str, default='ori', help='mixup method')
@@ -47,12 +69,90 @@ parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
 
 parser.add_argument('--slice_num', default=3, type=int,
                     help='number of image slice in mixup_v3')
+
+#comix
+parser.add_argument('--m_block_num',
+                    type=int,
+                    default=4,
+                    help='resolution of labeling, -1 for random')
+parser.add_argument('--m_part', type=int, default=20, help='partition size')
+parser.add_argument('--m_beta', type=float, default=0.32, help='label smoothness coef, 0.16~1.0')
+parser.add_argument('--m_gamma', type=float, default=1.0, help='supermodular diversity coef')
+parser.add_argument('--m_thres',
+                    type=float,
+                    default=0.83,
+                    help='threshold for over-penalization, tau, 0.81~0.86')
+parser.add_argument('--m_thres_type',
+                    type=str,
+                    default='hard',
+                    choices=['soft', 'hard'],
+                    help='thresholding type')
+parser.add_argument('--m_eta', type=float, default=0.05, help='prior coef')
+parser.add_argument('--mixup_alpha',
+                    type=float,
+                    default=2.0,
+                    help='alpha parameter for dirichlet prior')
+parser.add_argument('--m_omega', type=float, default=0.001, help='input compatibility coef, \omega')
+parser.add_argument('--set_resolve',
+                    # type=str2bool,
+                    default=True,
+                    help='post-processing for resolving the same outputs')
+parser.add_argument('--m_niter', type=int, default=4, help='number of outer iteration')
+parser.add_argument('--clean_lam', type=float, default=1.0, help='clean input regularization')
+
+
+
+# puzzlemix
+parser.add_argument('--box', type=str2bool, default=False, help='true for CutMix')
+parser.add_argument('--graph', type=str2bool, default=True, help='true for PuzzleMix')
+parser.add_argument('--neigh_size',
+                    type=int,
+                    default=4,
+                    help='neighbor size for computing distance beteeen image regions')
+parser.add_argument('--n_labels', type=int, default=3, help='label space size')
+parser.add_argument('--transport', type=str2bool, default=True, help='whether to use transport')
+parser.add_argument('--t_eps', type=float, default=0.8, help='transport cost coefficient')
+parser.add_argument('--t_size',
+                    type=int,
+                    default=-1,
+                    help='transport resolution. -1 for using the same resolution with graphcut')
+parser.add_argument('--adv_eps', type=float, default=10.0, help='adversarial training ball')
+parser.add_argument('--adv_p', type=float, default=0.0, help='adversarial training probability')
+parser.add_argument('--mp', type=int, default=8, help='multi-process for graphcut (CPU)')
+parser.add_argument('--in_batch',
+                    type=str2bool,
+                    default=False,
+                    help='whether to use different lambdas in batch')
+
+
+# training
+parser.add_argument('--batch_size', type=int, default=100)
+# parser.add_argument('--learning_rate', type=float, default=0.2)
+# parser.add_argument('--momentum', type=float, default=0.9)
+# parser.add_argument('--decay', type=float, default=0.0001, help='weight decay (L2 penalty)')
+# parser.add_argument('--schedule',
+#                     type=int,
+#                     nargs='+',
+#                     default=[100, 200],
+#                     help='decrease learning rate at these epochs')
+parser.add_argument(
+    '--gammas',
+    type=float,
+    nargs='+',
+    default=[0.1, 0.1],
+    help='LR is multiplied by gamma on schedule, number of gammas should be equal to schedule')
 args = parser.parse_args()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
+stride = 1
+args.mean = torch.tensor([x / 255 for x in [125.3, 123.0, 113.9]],
+                            dtype=torch.float32).reshape(1, 3, 1, 1).cuda()
+args.std = torch.tensor([x / 255 for x in [63.0, 62.1, 66.7]],
+                        dtype=torch.float32).reshape(1, 3, 1, 1).cuda()
+args.labels_per_class = 5000
 
 def rand_bbox(size, lam):
     W = size[2]
@@ -82,7 +182,6 @@ transform_train = transforms.Compose([
 ])
 
 transform_test = transforms.Compose([
-    # Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -90,7 +189,7 @@ transform_test = transforms.Compose([
 trainset = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=True, num_workers=2)
+    trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
 train_features, train_labels = next(iter(trainloader))
 print(f"Feature batch shape: {train_features.size()}")
@@ -100,20 +199,9 @@ print(f"Labels batch shape: {train_labels.size()}")
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=2)
+    testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
 
-
-
-# trainset = torchvision.datasets.CIFAR100(
-#     root='./data', train=True, download=True, transform=transform_train)
-# trainloader = torch.utils.data.DataLoader(
-#     trainset, batch_size=128, shuffle=True, num_workers=2)
-#
-# testset = torchvision.datasets.CIFAR100(
-#     root='./data', train=False, download=True, transform=transform_test)
-# testloader = torch.utils.data.DataLoader(
-#     testset, batch_size=100, shuffle=False, num_workers=2)
 # classes = ('plane', 'car', 'bird', 'cat', 'deer',
 #            'dog', 'frog', 'horse', 'ship', 'truck')
 
@@ -143,7 +231,7 @@ if args.resume:
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.pth' + args.model + '_' + str(args.epoch) + '_' + args.mixup + '_'
+    checkpoint = torch.load('./checkpoint/ckpt.pth' + '_' + args.model + '_' + str(args.epoch) + '_' + args.mixup + '_'
                             + str(args.seed))
     # net.load_state_dict(checkpoint['net'])
     net = checkpoint['net']
@@ -165,8 +253,11 @@ if not os.path.isdir('results'):
 logname = ('results/log' +  '_' + args.model + '_' + str(args.epoch) + '_' + args.mixup + '_'
            + str(args.seed) + '.csv')
 
-
+bce_loss = nn.BCELoss().cuda()   #二进制交叉熵损失函数
+bce_loss_sum = nn.BCELoss(reduction='sum').cuda()  #sum 所有样本的loss相加
+softmax = nn.Softmax(dim=1).cuda()
 criterion = nn.CrossEntropyLoss()
+criterion_batch = nn.CrossEntropyLoss(reduction='none').cuda()  #none 每个样本产生一个loss，共batch_size个值
 # optimizer = optim.SGD(net.parameters(), lr=args.lr,
 #                       momentum=0.9, weight_decay=5e-4)
 optimizer = torch.optim.SGD(net.parameters(), args.lr,
@@ -192,6 +283,66 @@ def train(epoch):
             loss = mp.mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
             train_loss += loss.item()
             _, predicted = outputs.max(1)
+
+        elif args.mixup == 'comix':
+            input_var = Variable(inputs, requires_grad=True)
+            target_var = Variable(targets)
+            
+            outputs = net(input_var)
+            loss_batch = 2  * criterion_batch(outputs, target_var) / 10  #此处10为类别数，如更换数据集需修改为对应类别
+            loss_batch_mean = torch.mean(loss_batch, dim=0)
+            loss_batch_mean.backward(retain_graph=True)
+            sc = torch.sqrt(torch.mean(input_var.grad**2, dim=1))
+
+            # Here, we calculate distance between most salient location (Compatibility)
+            # We can try various measurements
+            with torch.no_grad():
+                z = F.avg_pool2d(sc, kernel_size=8, stride=1)
+                z_reshape = z.reshape(args.batch_size, -1)
+                z_idx_1d = torch.argmax(z_reshape, dim=1)
+                z_idx_2d = torch.zeros((args.batch_size, 2), device=z.device)
+                z_idx_2d[:, 0] = z_idx_1d // z.shape[-1]
+                z_idx_2d[:, 1] = z_idx_1d % z.shape[-1]
+                A_dist = distance(z_idx_2d, dist_type='l1')
+            target_reweighted = to_one_hot(target_var, 10)
+            out, target_reweighted = mixup_process(inputs,
+                                                       target_reweighted,
+                                                       args=args,
+                                                       sc=sc,
+                                                       A_dist=A_dist)
+            out = net(out)
+            loss = bce_loss(softmax(out), target_reweighted)
+            train_loss += loss.item()
+            _, predicted = out.max(1)
+
+        elif args.mixup == 'puzzlemix':
+            unary = None
+            noise = None
+            adv_mask1 = 0
+            adv_mask2 = 0
+
+            input_var = Variable(inputs, requires_grad=True)
+            target_var = Variable(targets)
+            output = net(input_var)
+            loss_batch = 2  * criterion_batch(output,target_var) / 10
+            loss_batch_mean = torch.mean(loss_batch, dim=0)
+            loss_batch_mean.backward(retain_graph=True)
+            unary = torch.sqrt(torch.mean(input_var.grad**2, dim=1))
+            
+            # input_var, target_var = Variable(inputs), Variable(targets)
+            target_reweighted = to_one_hot_p(targets, 10)
+            out, target_reweighted = mixup_process_p(inputs,
+                                                   target_reweighted,
+                                                   args=args,
+                                                   grad=unary,
+                                                   noise=noise,
+                                                   adv_mask1=adv_mask1,
+                                                   adv_mask2=adv_mask2,
+                                                   mp=Pool(3))
+            out = net(out)
+            loss = bce_loss(softmax(out), target_reweighted)
+            train_loss += loss.item()
+            _, predicted = out.max(1)
 
         elif args.mixup == 'cutmix':
             # inputs, lam = cx.mixup_data(inputs, targets, args.alpha)
@@ -304,6 +455,7 @@ def train(epoch):
                      % (train_loss / (batch_idx + 1), reg_loss / (batch_idx + 1),
                         100. * correct / total, correct, total))
 
+
     return (train_loss / batch_idx, reg_loss / batch_idx, 100. * correct / total)
 
 def test(epoch):
@@ -346,7 +498,7 @@ def test(epoch):
         if not os.path.isdir('checkpoint/resnest50/'):
             os.mkdir('checkpoint/resnest50/')
 
-        torch.save(state, './checkpoint/ckpt.pth' + args.model + '_' + str(args.epoch) + '_' + args.mixup + '_'
+        torch.save(state, './checkpoint/ckpt.pth' + '_' + args.model + '_' + str(args.epoch) + '_' + args.mixup + '_'
                             + str(args.seed))
         best_acc = acc
 
@@ -373,6 +525,7 @@ if not os.path.exists(logname):
 
 for epoch in range(start_epoch, args.epoch):
     train_loss, reg_loss, train_acc = train(epoch)
+    print('1111')
     # test_loss, test_acc, wrong_img_list = test(epoch)
     test_loss, test_acc = test(epoch)
 

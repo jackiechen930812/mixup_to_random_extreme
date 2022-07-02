@@ -169,7 +169,7 @@ class ResNet(nn.Module):
     """
     # pylint: disable=unused-variable
     def __init__(self, block, layers, radix=1, groups=1, bottleneck_width=64,
-                 num_classes=1000, dilated=False, dilation=1,
+                 num_classes=9, dilated=False, dilation=1,
                  deep_stem=False, stem_width=64, avg_down=False,
                  rectified_conv=False, rectify_avg=False,
                  avd=False, avd_first=False,

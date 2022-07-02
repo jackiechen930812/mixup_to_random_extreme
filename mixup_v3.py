@@ -2,7 +2,8 @@ import numpy as np
 import torch
 
 def rand_bbox(img_shape, n):
-    batch, channel, img_h, img_w = img_shape[:]  # N, C, H, W
+
+    batch, channel, img_h, img_w = img_shape[:]
     interval_h = int(img_h / n)
     interval_w = int(img_w / n)
     A = np.zeros((batch, channel, img_h, img_w)) # A in the formula
