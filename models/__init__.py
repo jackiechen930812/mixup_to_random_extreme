@@ -9,3 +9,4 @@ from .mobilenet import *
 from .densenet3 import DenseNet190
 from .resnet import *
 from .resnest import *
+from .wide_resnet import *

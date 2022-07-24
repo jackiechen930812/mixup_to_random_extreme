@@ -1,28 +1,23 @@
 '''Train CIFAR100 with PyTorch.'''
 from __future__ import print_function
+
+import argparse
+import csv
+import os
+
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
-import models
 import torchvision
 import torchvision.transforms as transforms
-import torchvision.datasets as datasets
-import os
-import csv
-import argparse
 
-from models import *
-from utils import progress_bar
-
-import random
-from PIL import Image,ImageFilter
+import mix_aug
 # import Gau_noise
 import mixup as mp
-import cutmix as cx
 import mixup_v2 as mp_v2
+import models
+from models import *
+from utils import progress_bar, top_accuracy, calib_err
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
@@ -30,7 +25,7 @@ parser.add_argument('--resume', '-r', action='store_true',
 parser.add_argument('--name', default='0', type=str, help='name of run')
 parser.add_argument('--seed', default=0, type=int, help='random seed')
 parser.add_argument('--model', default="ResNet18", type=str,
-                    help='model type (default: ResNet18)')
+                    help='model type (default: ResNet18)')  # WideResNet
 parser.add_argument('--alpha', default=1., type=float,
                     help='mixup interpolation coefficient (default: 1)')
 parser.add_argument('--mixup', type=str, default='ori', help='mixup method')
@@ -45,11 +40,13 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
 
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
+parser.add_argument('--severity', type=int, default=3)
+parser.add_argument('--num_classes', type=int, default=100)
 args = parser.parse_args()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
-start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+start_epoch = 0  # start from epoch 0 or last checkpoint epoch,
 
 
 def rand_bbox(size, lam):
@@ -79,15 +76,24 @@ transform_train = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
+if args.mixup=="AugMix":
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+    ])
+
 transform_test = transforms.Compose([
     # Gau_noise.AddGaussianNoise(0.0, 8.0, 1.0),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
+preprocess = transform_test
 
 
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
+if args.mixup == 'AugMix':
+    trainset = mix_aug.AugMixDataset(trainset, preprocess)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2)
 
@@ -101,7 +107,8 @@ testloader = torch.utils.data.DataLoader(
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-net = ResNet18()
+# net = ResNet18()
+# net = WideResNet(28, 10, 0.3)
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -134,7 +141,7 @@ if args.resume:
     torch.set_rng_state(rng_state)
 else:
     print('==> Building model..')
-    net = models.__dict__[args.model]()
+    net = models.__dict__[args.model](num_classes=args.num_classes)
 
 net = net.to(device)
 if device == 'cuda':
@@ -163,6 +170,8 @@ def train(epoch):
     reg_loss = 0
     correct = 0
     total = 0
+    top1_acc, top5_acc = 0., 0.
+    rms_confidence, rms_correct = [], []
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         if args.mixup == 'ori':
@@ -171,6 +180,11 @@ def train(epoch):
             inputs = inputs.float()
             outputs = net(inputs)
             loss = mp.mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+            train_loss += loss.item()
+            _, predicted = outputs.max(1)
+        elif args.mixup == 'AugMix':
+            outputs = net(inputs)
+            loss = F.cross_entropy(outputs, targets)
             train_loss += loss.item()
             _, predicted = outputs.max(1)
 
@@ -244,15 +258,21 @@ def train(epoch):
         optimizer.step()
 
 
+
+
         # progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
         #              % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
+        top1_acc_item, top5_acc_item = top_accuracy(outputs.detach().cpu(), targets.detach().cpu(), topk=(1, 5))
+        top1_acc += top1_acc_item
+        top5_acc += top5_acc_item
+        rms_confidence.extend(F.softmax(outputs.detach().cpu(), dim=-1).squeeze().tolist())
+        rms_correct.extend(predicted.eq(targets).cpu().squeeze().tolist())
         progress_bar(batch_idx, len(trainloader),
-                     'Loss: %.3f | Reg: %.5f | Acc: %.3f%% (%d/%d)'
+                     'Loss: %.3f | Reg: %.5f | Acc: %.3f%% (%d/%d) | Top1 Acc: %.3f | Top5 Acc: %.3f'
                      % (train_loss / (batch_idx + 1), reg_loss / (batch_idx + 1),
-                        100. * correct / total, correct, total))
-
-    return (train_loss / batch_idx, reg_loss / batch_idx, 100. * correct / total)
+                        100. * correct / total, correct, total, 100. * top1_acc_item, 100. * top5_acc_item))
+    train_rms = 100 * calib_err(rms_confidence, rms_correct, p='2')
+    return (train_loss / batch_idx, reg_loss / batch_idx, 100. * correct / total, 100. * top1_acc / len(trainloader), 100. * top5_acc / len(trainloader), train_rms)
 
 def test(epoch):
     global best_acc
@@ -260,6 +280,8 @@ def test(epoch):
     test_loss = 0
     correct = 0
     total = 0
+    top1_acc, top5_acc = 0., 0.
+    rms_confidence, rms_correct = [], []
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -271,12 +293,17 @@ def test(epoch):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
+            top1_acc_item, top5_acc_item = top_accuracy(outputs.detach().cpu(), targets.detach().cpu(), topk=(1, 5))
+            top1_acc += top1_acc_item
+            top5_acc += top5_acc_item
+            rms_confidence.extend(F.softmax(outputs.detach().cpu(), dim=-1).squeeze().tolist())
+            rms_correct.extend(predicted.eq(targets).cpu().squeeze().tolist())
             # progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             #              % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
             progress_bar(batch_idx, len(testloader),
-                         'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                         'Loss: %.3f | Acc: %.3f%% (%d/%d) | Top1 Acc: %.3f | Top5 Acc: %.3f'
                          % (test_loss / (batch_idx + 1), 100. * correct / total,
-                            correct, total))
+                            correct, total, 100. * top1_acc_item, 100. * top5_acc_item))
 
     # Save checkpoint.
     acc = 100.*correct/total
@@ -288,27 +315,28 @@ def test(epoch):
             'acc': acc,
             'epoch': epoch,
         }
-        if not os.path.isdir('checkpoint/resnest50/'):
-            os.mkdir('checkpoint/resnest50/')
+        if not os.path.isdir('checkpoint/ResNet18/'):
+            os.mkdir('checkpoint/ResNet18/')
 
-        torch.save(state, './checkpoint/resnest50/ckpt.pth_' + args.model + '_epoch200_' +  args.mixup + '_'
+        torch.save(state, './checkpoint/ResNet18/ckpt.pth_' + args.model + '_epoch200_' +  args.mixup + '_'
                    + str(args.seed))
         best_acc = acc
-    return (test_loss / batch_idx, 100. * correct / total)
+    test_rms = 100 * calib_err(rms_confidence, rms_correct, p='2')
+    return (test_loss / batch_idx, 100. * correct / total, 100. * top1_acc / len(testloader), 100. * top5_acc / len(testloader), test_rms)
 
 if not os.path.exists(logname):
     with open(logname, 'w') as logfile:
         logwriter = csv.writer(logfile, delimiter=',')
-        logwriter.writerow(['epoch', 'train loss', 'reg loss', 'train acc',
-                            'test loss', 'test acc'])
+        logwriter.writerow(['epoch', 'train loss', 'reg loss', 'train acc', 'train top1 acc', 'train top5 acc', 'train_rms'
+                            'test loss', 'test acc', 'test top1 acc', 'test top5 acc', 'test_rms'])
 
 for epoch in range(start_epoch, args.epoch):
-    train_loss, reg_loss, train_acc = train(epoch)
-    test_loss, test_acc = test(epoch)
+    train_loss, reg_loss, train_acc, train_top1_acc, train_top5_acc, train_rms = train(epoch)
+    test_loss, test_acc, test_top1_acc, test_top5_acc, test_rms  = test(epoch)
     with open(logname, 'a') as logfile:
         logwriter = csv.writer(logfile, delimiter=',')
-        logwriter.writerow([epoch, train_loss, reg_loss, train_acc, test_loss,
-                            test_acc])
+        logwriter.writerow([epoch, train_loss, reg_loss, train_acc, train_top1_acc, train_top5_acc, train_rms, test_loss,
+                            test_acc, test_top1_acc, test_top5_acc, test_rms])
         scheduler.step()
 
 
