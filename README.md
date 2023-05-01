@@ -4,6 +4,18 @@
 * Python version 3.6
 * A [PyTorch installation](http://pytorch.org/)
 
+## Basic Installation Package
+```
+pip install opencv-python
+pip install easydict
+pip install pyyaml
+pip install matplotlib
+pip install scipy
+git clone https://github.com/NVIDIA/apex.git
+cd apex
+python setup.py install
+pip install gco-wrapper
+```
 ## FILE description
 * ./checkpoint  : Stored with trained models
 
@@ -44,7 +56,6 @@ $ python train.py --lr=0.1 --seed=20220103 --decay=1e-4 --epoch=1
 * Run with：
     ```
     python frequency.py
-    
     ```
     data is kept in: ./data/CIFAR10/
 
